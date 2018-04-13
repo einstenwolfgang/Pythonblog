@@ -2,9 +2,8 @@ import asyncio
 import aiomysql
 import logging
 
-#定义链接数据库的链接池子
-@asyncio.coroutine
-def creat_pool(loop,**kw):
+#定义链接数据库的链接池
+async def creat_pool(loop,**kw):
 	logging.info('create database connection poll')
 	global __pool
 	__pool = yield from aiomysql.create_pool(
@@ -19,6 +18,13 @@ def creat_pool(loop,**kw):
 		minsize = kw.get('minsize',1),
 		loop = loop
 		)
+
+#结束连接池
+async def destroy_pool():
+    global __pool
+    if __pool is not None:
+        __pool.close()
+        await __pool.waitclosed()
 
  #定义从链接池执行的select语句
 @asyncio.coroutine
@@ -88,8 +94,7 @@ class Model(dict, metaclass=ModelMetaclass):
 
     #静态Class方法，使用例User.find(cls,pk)
     @classmethod
-    @asyncio.coroutine
-    def find(cls, pk):
+    async def find(cls, pk):
         #通过primary key寻找对象
         rs = yield from select('%s where `%s`=?' % (cls.__select__, cls.__primary_key__), [pk], 1)
         if len(rs) == 0:
@@ -97,8 +102,8 @@ class Model(dict, metaclass=ModelMetaclass):
         return cls(**rs[0])
     
     #实例方法，使用例如New user.save() 保存初始化数据
-    @asyncio.coroutine
-    def save(self):
+    
+    async def save(self):
         args = list(map(self.getValueOrDefault, self.__fields__))
         args.append(self.getValueOrDefault(self.__primary_key__))
         rows = yield from execute(self.__insert__, args)
@@ -141,17 +146,22 @@ class StringField(Field):
 class BooleanField(Field):
 
     def __init__(self, name=None, primary_key=False, default=None, ddl='varchar(100)'):
-        super().__init__(name, ddl, primary_key, default)
+        super().__init__(name, 'boolean', primary_key, default)
 
 class TextField(Field):
 
     def __init__(self, name=None, primary_key=False, default=None, ddl='varchar(100)'):
-        super().__init__(name, ddl, primary_key, default)
+        super().__init__(name, 'text', primary_key, default)
+
+class IntegerField(Field):
+
+    def __init__(self, name=None, primary_key=False, default=None, ddl='varchar(100)'):
+        super().__init__(name, 'bigint', primary_key, default)
 
 class FloatField(Field):
 
     def __init__(self, name=None, primary_key=False, default=None, ddl='varchar(100)'):
-        super().__init__(name, ddl, primary_key, default)
+        super().__init__(name, 'real',primary_key, default)
 #定义model使用的数据库元类
 class ModelMetaclass(type):
 
